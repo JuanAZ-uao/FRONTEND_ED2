@@ -1,0 +1,40 @@
+export interface ColombiaDepartment {
+  department: string;
+  cities: string[];
+}
+
+export const COLOMBIA_LOCATIONS: ColombiaDepartment[] = [
+  { department: 'Amazonas', cities: ['Leticia'] },
+  { department: 'Antioquia', cities: ['Medellin', 'Bello', 'Envigado', 'Itagui', 'Rionegro'] },
+  { department: 'Arauca', cities: ['Arauca'] },
+  { department: 'Atlantico', cities: ['Barranquilla', 'Soledad'] },
+  { department: 'Bogota D.C.', cities: ['Bogota'] },
+  { department: 'Bolivar', cities: ['Cartagena', 'Magangue'] },
+  { department: 'Boyaca', cities: ['Tunja', 'Duitama', 'Sogamoso'] },
+  { department: 'Caldas', cities: ['Manizales'] },
+  { department: 'Caqueta', cities: ['Florencia'] },
+  { department: 'Casanare', cities: ['Yopal'] },
+  { department: 'Cauca', cities: ['Popayan'] },
+  { department: 'Cesar', cities: ['Valledupar'] },
+  { department: 'Choco', cities: ['Quibdo'] },
+  { department: 'Cordoba', cities: ['Monteria'] },
+  { department: 'Cundinamarca', cities: ['Soacha', 'Chia', 'Zipaquira', 'Facatativa'] },
+  { department: 'Guainia', cities: ['Inirida'] },
+  { department: 'Guaviare', cities: ['San Jose del Guaviare'] },
+  { department: 'Huila', cities: ['Neiva'] },
+  { department: 'La Guajira', cities: ['Riohacha', 'Maicao'] },
+  { department: 'Magdalena', cities: ['Santa Marta'] },
+  { department: 'Meta', cities: ['Villavicencio'] },
+  { department: 'Narino', cities: ['Pasto', 'Tumaco'] },
+  { department: 'Norte de Santander', cities: ['Cucuta', 'Ocana'] },
+  { department: 'Putumayo', cities: ['Mocoa'] },
+  { department: 'Quindio', cities: ['Armenia'] },
+  { department: 'Risaralda', cities: ['Pereira', 'Dosquebradas'] },
+  { department: 'San Andres y Providencia', cities: ['San Andres'] },
+  { department: 'Santander', cities: ['Bucaramanga', 'Floridablanca'] },
+  { department: 'Sucre', cities: ['Sincelejo'] },
+  { department: 'Tolima', cities: ['Ibague'] },
+  { department: 'Valle del Cauca', cities: ['Cali', 'Palmira', 'Buenaventura', 'Tulua'] },
+  { department: 'Vaupes', cities: ['Mitu'] },
+  { department: 'Vichada', cities: ['Puerto Carreno'] },
+];

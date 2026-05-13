@@ -14,13 +14,14 @@ interface Step1Form {
 
 interface Step2Form {
   phone: string;
+  department: string;
   city: string;
   birthDate: string;
   gender: string;
 }
 
 const initialStep1: Step1Form = { firstName: '', lastName: '', email: '', password: '' };
-const initialStep2: Step2Form = { phone: '', city: '', birthDate: '', gender: '' };
+const initialStep2: Step2Form = { phone: '', department: '', city: '', birthDate: '', gender: '' };
 
 const getModeFromQuery = (value: string | null): AuthMode =>
   value === 'register' ? 'register' : 'login';
@@ -43,7 +44,13 @@ export const useAuthController = () => {
     setStep1((prev) => ({ ...prev, [field]: value }));
 
   const onChangeStep2 = (field: keyof Step2Form, value: string) =>
-    setStep2((prev) => ({ ...prev, [field]: value }));
+    setStep2((prev) => {
+      if (field === 'department') {
+        return { ...prev, department: value, city: '' };
+      }
+
+      return { ...prev, [field]: value };
+    });
 
   const toggleMode = () => {
     const next = mode === 'login' ? 'register' : 'login';
@@ -96,9 +103,14 @@ export const useAuthController = () => {
         authService.persistSession(result);
 
         try {
+          const composedCity =
+            step2.department && step2.city
+              ? `${step2.city}, ${step2.department}`
+              : step2.city || null;
+
           const updated = await userService.updateProfile({
             phone: step2.phone || null,
-            city: step2.city || null,
+            city: composedCity,
             birthDate: step2.birthDate || null,
             gender: step2.gender || null,
           });

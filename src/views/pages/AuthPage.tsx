@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useAuthController } from '../../controllers/useAuthController';
+import { COLOMBIA_LOCATIONS } from '../../data/colombiaLocations';
 
 const GENDERS = ['Masculino', 'Femenino', 'No binario', 'Prefiero no decir', 'Otro'];
 
@@ -27,6 +28,9 @@ function AuthPage() {
     onChangeStep1, onChangeStep2,
     toggleMode, advanceToStep2, backToStep1, submit,
   } = useAuthController();
+
+  const availableCities =
+    COLOMBIA_LOCATIONS.find((item) => item.department === step2.department)?.cities ?? [];
 
   return (
     <div className="auth-wrap">
@@ -139,8 +143,24 @@ function AuthPage() {
                       <input value={step2.phone} onChange={(e) => onChangeStep2('phone', e.target.value)} placeholder="+57 300 000 0000" type="tel" />
                     </label>
                     <label>
-                      Ciudad / Departamento
-                      <input value={step2.city} onChange={(e) => onChangeStep2('city', e.target.value)} placeholder="Cali, Valle del Cauca" />
+                      Departamento
+                      <select value={step2.department} onChange={(e) => onChangeStep2('department', e.target.value)}>
+                        <option value="">Seleccionar departamento...</option>
+                        {COLOMBIA_LOCATIONS.map((item) => (
+                          <option key={item.department} value={item.department}>{item.department}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Ciudad
+                      <select value={step2.city} onChange={(e) => onChangeStep2('city', e.target.value)} disabled={!step2.department}>
+                        <option value="">
+                          {step2.department ? 'Seleccionar ciudad...' : 'Primero selecciona departamento'}
+                        </option>
+                        {availableCities.map((city) => (
+                          <option key={city} value={city}>{city}</option>
+                        ))}
+                      </select>
                     </label>
                     <label>
                       Fecha de nacimiento
