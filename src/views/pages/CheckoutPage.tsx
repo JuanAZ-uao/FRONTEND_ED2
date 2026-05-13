@@ -42,8 +42,8 @@ function CheckoutPage() {
             <Link to="/" className="primary-btn">
               Ver conciertos
             </Link>
-            <Link to="/dashboard" className="ghost-btn">
-              Ir al dashboard
+            <Link to="/" className="ghost-btn">
+              Ir al inicio
             </Link>
           </div>
         </section>
