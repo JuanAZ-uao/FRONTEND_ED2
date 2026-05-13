@@ -1,0 +1,176 @@
+import { Link } from 'react-router-dom';
+import { useCheckoutController } from '../../controllers/useCheckoutController';
+
+function CheckoutPage() {
+  const {
+    event,
+    selectedTierId,
+    setSelectedTierId,
+    selectedTier,
+    quantity,
+    increaseQty,
+    decreaseQty,
+    card,
+    updateCardField,
+    summary,
+    submitPayment,
+    status,
+    statusType,
+    loading,
+  } = useCheckoutController();
+
+  if (!event || !selectedTier) {
+    return (
+      <div className="page-stack" style={{ maxWidth: 760, marginInline: 'auto' }}>
+        <section className="panel-card">
+          <span className="overline">Compra de Entradas</span>
+          <h2 className="section-title" style={{ marginTop: 8 }}>
+            Sin concierto seleccionado
+          </h2>
+          <p className="muted" style={{ marginTop: 8 }}>
+            Esta pagina permanece vacia hasta que elijas un concierto desde su vista de detalle.
+          </p>
+          <div style={{ marginTop: 16, display: 'flex', gap: 10 }}>
+            <Link to="/" className="primary-btn">
+              Ver conciertos
+            </Link>
+            <Link to="/dashboard" className="ghost-btn">
+              Ir al dashboard
+            </Link>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <div className="page-stack split">
+      <section className="panel-card">
+        <span className="overline">Compra de Entradas</span>
+        <h2 className="section-title" style={{ marginTop: 8 }}>
+          {event.artist}
+        </h2>
+        <p className="muted" style={{ marginTop: 8 }}>
+          {event.title} · {event.dateLabel}
+        </p>
+
+        <div className="form-grid" style={{ marginTop: 16 }}>
+          <label>
+            Localidad
+            <select value={selectedTierId} onChange={(event) => setSelectedTierId(event.target.value)}>
+              {event.ticketTiers.map((tier) => (
+                <option key={tier.id} value={tier.id}>
+                  {tier.name} - ${tier.price.toLocaleString('es-CO')}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="muted">Cantidad</span>
+            <div className="qty-box">
+              <button type="button" onClick={decreaseQty}>
+                -
+              </button>
+              <span>{quantity}</span>
+              <button type="button" onClick={increaseQty}>
+                +
+              </button>
+            </div>
+          </div>
+
+          <div className="meta-line">
+            <span>{selectedTier.name}</span>
+            <span>{selectedTier.remaining} disponibles</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="panel-card">
+        <h2 className="section-title">Pago con Tarjeta</h2>
+
+        <form
+          className="form-grid"
+          style={{ marginTop: 14 }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submitPayment();
+          }}
+        >
+          <label>
+            Nombre en la tarjeta
+            <input
+              value={card.holderName}
+              onChange={(event) => updateCardField('holderName', event.target.value)}
+              placeholder="Nombre Apellido"
+              autoComplete="cc-name"
+            />
+          </label>
+
+          <label>
+            Numero de tarjeta
+            <input
+              value={card.cardNumber}
+              onChange={(event) => updateCardField('cardNumber', event.target.value)}
+              placeholder="4242 4242 4242 4242"
+              inputMode="numeric"
+              maxLength={19}
+              autoComplete="cc-number"
+            />
+          </label>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <label>
+              Expiracion
+              <input
+                value={card.expiry}
+                onChange={(event) => updateCardField('expiry', event.target.value)}
+                placeholder="MM/AA"
+                inputMode="numeric"
+                maxLength={5}
+                autoComplete="cc-exp"
+              />
+            </label>
+
+            <label>
+              CVC
+              <input
+                value={card.cvc}
+                onChange={(event) => updateCardField('cvc', event.target.value)}
+                placeholder="123"
+                inputMode="numeric"
+                maxLength={3}
+                autoComplete="cc-csc"
+              />
+            </label>
+          </div>
+
+          <div className="meta-line">
+            <span>Subtotal</span>
+            <span>${summary.subtotal.toLocaleString('es-CO')}</span>
+          </div>
+          <div className="meta-line">
+            <span>Servicio</span>
+            <span>${summary.serviceFee.toLocaleString('es-CO')}</span>
+          </div>
+          <div className="meta-line">
+            <span>Seguro</span>
+            <span>${summary.insurance.toLocaleString('es-CO')}</span>
+          </div>
+          <div className="meta-line" style={{ fontSize: '1rem' }}>
+            <strong>Total</strong>
+            <strong>${summary.total.toLocaleString('es-CO')}</strong>
+          </div>
+
+          <button className="primary-btn" type="submit" disabled={loading}>
+            {loading ? 'Procesando pago...' : 'Confirmar y pagar'}
+          </button>
+        </form>
+
+        {status && <p className={`feedback-alert ${statusType}`}>{status}</p>}
+      </section>
+    </div>
+  );
+}
+
+export default CheckoutPage;
