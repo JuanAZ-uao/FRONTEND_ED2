@@ -111,11 +111,11 @@ function AuthPage() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                       <label>
                         Nombre
-                        <input value={step1.firstName} onChange={(e) => onChangeStep1('firstName', e.target.value)} placeholder="Samuel" autoComplete="given-name" />
+                        <input value={step1.firstName} onChange={(e) => onChangeStep1('firstName', e.target.value)} autoComplete="given-name" />
                       </label>
                       <label>
                         Apellido
-                        <input value={step1.lastName} onChange={(e) => onChangeStep1('lastName', e.target.value)} placeholder="Rios" autoComplete="family-name" />
+                        <input value={step1.lastName} onChange={(e) => onChangeStep1('lastName', e.target.value)} autoComplete="family-name" />
                       </label>
                     </div>
                     <label>
