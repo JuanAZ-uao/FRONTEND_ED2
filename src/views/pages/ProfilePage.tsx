@@ -3,7 +3,7 @@ import { useProfileController, type ProfileSection } from '../../controllers/use
 import { CONCERT_GENRES, type Genre, formatConcertDate } from '../../models/event.model';
 import { preferencesService } from '../../services/preferences.service';
 import { useState, useEffect } from 'react';
-import type { PaymentMethod, NotifPrefs, UserTicket } from '../../services/user.service';
+import type { NotifPrefs } from '../../services/user.service';
 
 const GENDERS = ['Masculino', 'Femenino', 'No binario', 'Prefiero no decir', 'Otro'];
 const BRAND_GRADIENT: Record<string, string> = {

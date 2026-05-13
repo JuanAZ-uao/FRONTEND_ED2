@@ -109,7 +109,7 @@ function EventDetailPage() {
 
         <div style={{ marginTop: 16 }}>
           <Link
-            to={`/checkout?event=${event.id}&tier=${selectedTierId}&qty=${quantity}`}
+            to={`/queue?event=${event.id}&tier=${selectedTierId}&qty=${quantity}`}
             className="primary-btn"
             style={{ display: 'inline-block' }}
           >

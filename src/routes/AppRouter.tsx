@@ -3,6 +3,7 @@ import MainLayout from '../views/layouts/MainLayout';
 import HomePage from '../views/pages/HomePage';
 import EventDetailPage from '../views/pages/EventDetailPage';
 import AuthPage from '../views/pages/AuthPage';
+import QueuePage from '../views/pages/QueuePage';
 import CheckoutPage from '../views/pages/CheckoutPage';
 import TicketsPage from '../views/pages/TicketsPage';
 import ForgotPasswordPage from '../views/pages/ForgotPasswordPage';
@@ -16,6 +17,7 @@ function AppRouter() {
       <Route element={<MainLayout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/event/:id" element={<EventDetailPage />} />
+        <Route path="/queue" element={<QueuePage />} />
         <Route path="/checkout" element={<CheckoutPage />} />
         <Route path="/tickets" element={<TicketsPage />} />
         <Route path="/payment" element={<PaymentPage />} />

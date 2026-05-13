@@ -3,6 +3,32 @@ export type ConcertStatus = 'DRAFT' | 'PUBLISHED' | 'LIVE' | 'SOLD_OUT' | 'CANCE
 export const CONCERT_GENRES = ['Pop', 'Rock', 'Urban', 'Alternative', 'Electronic'] as const;
 export type Genre = (typeof CONCERT_GENRES)[number];
 
+export interface EventTicketTier {
+  id: string;
+  name: string;
+  price: number;
+  remaining: number;
+  perks: string[];
+}
+
+export interface EventModel {
+  id: number;
+  slug: string;
+  artist: string;
+  title: string;
+  dateLabel: string;
+  city: string;
+  venue: string;
+  genre: Genre;
+  rating: number;
+  soldPercent: number;
+  heroImage: string;
+  posterImage: string;
+  description: string;
+  tags: string[];
+  ticketTiers: EventTicketTier[];
+}
+
 export interface Artist {
   id: number;
   name: string;

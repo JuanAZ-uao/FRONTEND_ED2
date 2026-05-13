@@ -1,5 +1,19 @@
 const SESSION_KEY = 'concertix_auth_session';
-const BASE_URL = `http://${window.location.hostname}:3000/api`;
+
+const normalizeUrl = (value: string) => value.trim().replace(/\/+$/, '');
+
+const resolveApiBaseUrl = () => {
+  const configuredUrl = import.meta.env.VITE_API_URL;
+
+  if (configuredUrl) {
+    const normalized = normalizeUrl(configuredUrl);
+    return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
+  }
+
+  return `http://${window.location.hostname}:3000/api`;
+};
+
+const BASE_URL = resolveApiBaseUrl();
 
 export const wait = (ms = 240) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 

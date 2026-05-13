@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { PaymentCard } from '../models/payment.model';
 import { formatConcertDate, type Concert } from '../models/event.model';
@@ -38,7 +38,7 @@ const sanitizeExpiry = (value: string) => {
 
 const sanitizeCvc = (value: string) => value.replace(/\D/g, '').slice(0, 3);
 
-type QueueState = 'idle' | 'waiting' | 'granted';
+type QueueState = 'idle' | 'granted';
 type BaseSeatStatus = 'available' | 'reserved' | 'blocked';
 type SeatStatus = BaseSeatStatus | 'selected';
 
@@ -90,7 +90,9 @@ export const useCheckoutController = () => {
   const [queueState, setQueueState] = useState<QueueState>('idle');
   const [queuePosition, setQueuePosition] = useState(0);
   const [queueEtaSeconds, setQueueEtaSeconds] = useState(0);
+  const [turnSecondsLeft, setTurnSecondsLeft] = useState(0);
   const [loading, setLoading] = useState(false);
+  const completedPurchaseRef = useRef(false);
 
   useEffect(() => {
     if (!event) {
@@ -165,53 +167,72 @@ export const useCheckoutController = () => {
   useEffect(() => {
     if (!event || !selectedTierId) return;
 
-    const session = authService.getSession();
-
-    setQueueState('waiting');
-    setQueuePosition(0);
-    setQueueEtaSeconds(0);
-    setStatusType('info');
-    setStatus('Entraste en la cola de compra. Espera tu turno para continuar.');
-
-    const detachUpdate = socketQueueService.onQueueUpdate((payload) => {
-      setQueueState('waiting');
-      setQueuePosition(payload.position);
-      setQueueEtaSeconds(payload.estimatedWaitSeconds);
-    });
-
-    const detachGranted = socketQueueService.onQueueGranted((payload) => {
-      setQueueState('granted');
+    const activeTurn = socketQueueService.getActiveTurn();
+    if (!activeTurn || activeTurn.expiresAt <= Date.now() || activeTurn.roomId !== String(event.id)) {
+      socketQueueService.clearActiveTurn();
+      setQueueState('idle');
       setQueuePosition(0);
       setQueueEtaSeconds(0);
-      setStatusType('success');
-      setStatus(
-        `Tu turno fue habilitado por ${payload.holdSeconds} segundos. Selecciona asientos y confirma el pago.`
-      );
+      setTurnSecondsLeft(0);
+      setStatusType('info');
+      setStatus('Debes entrar primero a la sala de espera para obtener un turno de compra.');
+      navigate(`/queue?event=${event.id}&tier=${selectedTierId}&qty=${quantity}`, { replace: true });
+      return;
+    }
+
+    setQueueState('granted');
+    setQueuePosition(0);
+    setQueueEtaSeconds(0);
+    setStatusType('success');
+    setStatus('Turno activo. Completa la compra antes de que termine el tiempo.');
+
+    const syncTurnRemaining = () => {
+      const currentTurn = socketQueueService.getActiveTurn();
+      const expiresAt = currentTurn?.expiresAt ?? activeTurn.expiresAt;
+      const remaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+      setTurnSecondsLeft(remaining);
+    };
+
+    syncTurnRemaining();
+    const intervalId = setInterval(syncTurnRemaining, 1000);
+
+    const detachExpired = socketQueueService.onQueueExpired((payload) => {
+      setQueueState('idle');
+      setQueuePosition(0);
+      setQueueEtaSeconds(0);
+      setTurnSecondsLeft(0);
+      setStatusType('error');
+      setStatus(payload.message || 'Tu turno de compra termino y saliste de la cola.');
+      navigate(`/queue?event=${event.id}&tier=${selectedTierId}&qty=${quantity}`, { replace: true });
     });
 
     const detachError = socketQueueService.onQueueError((payload) => {
-      setQueueState('idle');
       setStatusType('error');
       setStatus(payload.message || 'No fue posible entrar a la cola');
     });
 
-    socketQueueService.joinQueue({
-      eventSlug: String(event.id),
-      tierId: selectedTierId,
-      quantity,
-      userEmail: session?.user.email,
+    const detachCompleted = socketQueueService.onQueueCompleted(() => {
+      setQueueState('idle');
+      setQueuePosition(0);
+      setQueueEtaSeconds(0);
+      setTurnSecondsLeft(0);
     });
 
     return () => {
-      detachUpdate();
-      detachGranted();
+      clearInterval(intervalId);
+      detachExpired();
       detachError();
-      socketQueueService.leaveQueue();
+      detachCompleted();
     };
-  }, [event?.id, selectedTierId]);
+  }, [event?.id, selectedTierId, quantity, navigate]);
 
   useEffect(() => {
-    return () => { socketQueueService.disconnect(); };
+    return () => {
+      if (!completedPurchaseRef.current && socketQueueService.getActiveTurn()) {
+        socketQueueService.leaveQueue();
+      }
+      socketQueueService.disconnect();
+    };
   }, []);
 
   const updateCardField = (field: keyof PaymentCard, value: string) => {
@@ -289,6 +310,12 @@ export const useCheckoutController = () => {
       return;
     }
 
+    if (turnSecondsLeft <= 0) {
+      setStatusType('error');
+      setStatus('Tu turno de compra ya expiro. Debes volver a entrar en la cola.');
+      return;
+    }
+
     if (selectedSeats.length !== quantity) {
       setStatusType('error');
       setStatus(`Debes seleccionar exactamente ${quantity} asiento(s) para continuar`);
@@ -328,6 +355,13 @@ export const useCheckoutController = () => {
           .catch(() => {});
       }
 
+      completedPurchaseRef.current = true;
+      const activeTurn = socketQueueService.getActiveTurn();
+      socketQueueService.completeTurn({ roomId: activeTurn?.roomId });
+      socketQueueService.clearActiveTurn();
+      setQueueState('idle');
+      setTurnSecondsLeft(0);
+
       setStatusType('success');
       setStatus(`Pago aprobado - Operacion ${result.operationId}`);
       navigate('/tickets', { state: { purchaseSuccess: 'Compra realizada correctamente' } });
@@ -355,6 +389,7 @@ export const useCheckoutController = () => {
     queueState,
     queuePosition,
     queueEtaSeconds,
+    turnSecondsLeft,
     summary,
     submitPayment,
     status,

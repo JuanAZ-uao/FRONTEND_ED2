@@ -19,6 +19,7 @@ function CheckoutPage() {
     queueState,
     queuePosition,
     queueEtaSeconds,
+    turnSecondsLeft,
     summary,
     submitPayment,
     status,
@@ -50,8 +51,17 @@ function CheckoutPage() {
     );
   }
 
-  const queueIsWaiting = queueState === 'waiting';
+  const queueIsWaiting = queueState !== 'granted';
   const queueIsGranted = queueState === 'granted';
+
+  const formatRemaining = (seconds: number) => {
+    const safeSeconds = Math.max(0, seconds);
+    const minutes = Math.floor(safeSeconds / 60)
+      .toString()
+      .padStart(2, '0');
+    const secs = (safeSeconds % 60).toString().padStart(2, '0');
+    return `${minutes}:${secs}`;
+  };
 
   return (
     <div className="page-stack">
@@ -60,15 +70,18 @@ function CheckoutPage() {
           <p className="queue-title">Cola de compra en tiempo real</p>
           {queueIsWaiting ? (
             <p className="muted">
-              Estas en cola para comprar. Posicion #{queuePosition || '...'} · Tiempo estimado {queueEtaSeconds ||
-                '...'} s
+              Validando tu turno de compra...
+              {queuePosition > 0 ? ` Posicion #${queuePosition}.` : ''}
+              {queueEtaSeconds > 0 ? ` Tiempo estimado ${queueEtaSeconds}s.` : ''}
             </p>
           ) : (
-            <p className="muted">Turno habilitado. Ya puedes seleccionar asientos y confirmar el pago.</p>
+            <p className="muted">
+              Turno habilitado. Tiempo restante: <strong>{formatRemaining(turnSecondsLeft)}</strong>.
+            </p>
           )}
         </div>
         <span className={`queue-pill ${queueIsWaiting ? 'waiting' : 'granted'}`}>
-          {queueIsWaiting ? 'En espera' : 'Turno activo'}
+          {queueIsWaiting ? 'Sin turno' : 'Turno activo'}
         </span>
       </section>
 
@@ -88,7 +101,7 @@ function CheckoutPage() {
               <select
                 value={selectedTierId}
                 onChange={(event) => setSelectedTierId(event.target.value)}
-                disabled={loading}
+                disabled={loading || queueIsWaiting}
               >
                 {event.ticketTypes.map((tier) => (
                   <option key={tier.id} value={String(tier.id)}>
@@ -249,10 +262,10 @@ function CheckoutPage() {
             <button
               className="primary-btn"
               type="submit"
-              disabled={loading || !queueIsGranted || selectedSeats.length !== quantity}
+              disabled={loading || !queueIsGranted || selectedSeats.length !== quantity || turnSecondsLeft <= 0}
             >
               {queueIsWaiting
-                ? 'Esperando turno...'
+                ? 'Sin turno activo'
                 : loading
                   ? 'Procesando pago...'
                   : 'Confirmar y pagar'}

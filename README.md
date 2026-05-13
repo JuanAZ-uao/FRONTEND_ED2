@@ -34,4 +34,21 @@ Frontend construido con React + TypeScript y arquitectura MVC.
 npm install
 npm run dev
 npm run build
+npm run test:unit
+npm run test:functional
 ```
+
+## Variables de entorno
+
+| Variable | Descripcion |
+|---|---|
+| `VITE_API_URL` | URL publica del backend en Railway (ej: `https://tu-api.up.railway.app`) |
+
+## Deploy en Vercel
+
+1. Conecta este repositorio (EDA2_F) en Vercel.
+2. En Project Settings > Environment Variables agrega `VITE_API_URL` con la URL de Railway.
+3. Deploy con la configuracion incluida en `vercel.json`:
+	- Build command: `npm run build`
+	- Output directory: `dist`
+	- Rewrites SPA hacia `index.html` para rutas de React Router.
