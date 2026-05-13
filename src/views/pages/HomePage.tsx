@@ -2,14 +2,25 @@ import EventCard from '../components/EventCard';
 import FilterChips from '../components/FilterChips';
 import HeroSection from '../components/HeroSection';
 import { useHomeController } from '../../controllers/useHomeController';
+import type { Genre } from '../../models/event.model';
 
 function HomePage() {
-  const { featured, genres, activeGenre, setActiveGenre, events, preferredGenres, preferredEvents } =
+  const { featured, genres, activeGenre, setActiveGenre, events, loading, preferredGenres, preferredEvents } =
     useHomeController();
+
+  if (loading) {
+    return (
+      <div className="page-stack">
+        <section className="section-card">
+          <p className="muted">Cargando conciertos...</p>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="page-stack">
-      <HeroSection event={featured} />
+      {featured && <HeroSection event={featured} />}
 
       {preferredGenres.length > 0 && (
         <section className="section-card">
@@ -18,7 +29,7 @@ function HomePage() {
           </div>
 
           <div className="chip-row" style={{ marginBottom: 14 }}>
-            {preferredGenres.map((genre) => (
+            {preferredGenres.map((genre: Genre) => (
               <span key={genre} className="chip active">
                 {genre}
               </span>

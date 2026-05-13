@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom';
-import type { EventModel } from '../../models/event.model';
+import type { Concert } from '../../models/event.model';
+import { formatConcertDate, getSoldPercent } from '../../models/event.model';
 
 interface HeroSectionProps {
-  event: EventModel;
+  event: Concert;
 }
 
 function HeroSection({ event }: HeroSectionProps) {
@@ -10,16 +11,16 @@ function HeroSection({ event }: HeroSectionProps) {
     <section className="hero-card">
       <div className="hero-copy">
         <span className="overline">CONCERTIX EXPERIENCE</span>
-        <h1 className="hero-title">{event.title}</h1>
+        <h1 className="hero-title">{event.tourName}</h1>
         <p className="muted">{event.description}</p>
         <div className="meta-line">
-          <span>{event.dateLabel}</span>
+          <span>{formatConcertDate(event.date)}</span>
           <span>
-            {event.city} · {event.venue}
+            {event.venue.city} · {event.venue.name}
           </span>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <Link to={`/event/${event.slug}`} className="primary-btn">
+          <Link to={`/event/${event.id}`} className="primary-btn">
             Comprar Entradas
           </Link>
           <Link to="/checkout" className="ghost-btn">
@@ -28,8 +29,8 @@ function HeroSection({ event }: HeroSectionProps) {
         </div>
       </div>
 
-      <div className="hero-art" style={{ backgroundImage: `url(${event.heroImage})` }}>
-        <span className="hero-badge">{event.soldPercent}% vendido</span>
+      <div className="hero-art" style={{ backgroundImage: `url(${event.bannerUrl ?? ''})` }}>
+        <span className="hero-badge">{getSoldPercent(event.ticketTypes)}% vendido</span>
       </div>
     </section>
   );

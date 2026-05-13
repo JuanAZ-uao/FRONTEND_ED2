@@ -1,30 +1,36 @@
-import { wait } from './api.service';
+import { apiFetch } from './api.service';
 
-export interface AuthPayload {
-  fullName?: string;
+export interface AuthUser {
+  id: number;
+  firstName: string;
+  lastName: string;
   email: string;
-  password: string;
+  role: string;
+  phone: string | null;
+  birthDate: string | null;
+  gender: string | null;
+  city: string | null;
+  document: string | null;
+  bio: string | null;
+  avatarUrl: string | null;
+  createdAt: string;
 }
 
 export interface AuthSession {
-  user: {
-    fullName: string;
-    email: string;
-  };
+  user: AuthUser;
   token: string;
+  refreshToken: string;
 }
 
-const SESSION_STORAGE_KEY = 'concertix_auth_session';
+const SESSION_KEY = 'concertix_auth_session';
 
 const persistSession = (session: AuthSession) => {
-  localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
 };
 
 const getSession = (): AuthSession | null => {
-  const raw = localStorage.getItem(SESSION_STORAGE_KEY);
-
+  const raw = localStorage.getItem(SESSION_KEY);
   if (!raw) return null;
-
   try {
     return JSON.parse(raw) as AuthSession;
   } catch {
@@ -33,39 +39,31 @@ const getSession = (): AuthSession | null => {
 };
 
 const clearSession = () => {
-  localStorage.removeItem(SESSION_STORAGE_KEY);
+  localStorage.removeItem(SESSION_KEY);
 };
 
-const login = async (payload: AuthPayload): Promise<AuthSession> => {
-  await wait();
+const getUserFullName = (user: AuthUser): string =>
+  `${user.firstName} ${user.lastName}`.trim();
 
-  if (!payload.email || !payload.password) {
-    throw new Error('Email y password son obligatorios');
-  }
-
-  return {
-    user: {
-      fullName: 'Samuel Rios',
-      email: payload.email,
-    },
-    token: 'mock-token-frontend',
-  };
+const login = async (payload: { email: string; password: string }): Promise<AuthSession> => {
+  const res = await apiFetch<{ accessToken: string; refreshToken: string; user: AuthUser }>(
+    '/auth/login',
+    { method: 'POST', body: JSON.stringify({ email: payload.email, password: payload.password }) }
+  );
+  return { user: res.user, token: res.accessToken, refreshToken: res.refreshToken };
 };
 
-const register = async (payload: AuthPayload): Promise<AuthSession> => {
-  await wait();
-
-  if (!payload.fullName || !payload.email || !payload.password) {
-    throw new Error('Todos los campos son obligatorios para registro');
-  }
-
-  return {
-    user: {
-      fullName: payload.fullName,
-      email: payload.email,
-    },
-    token: 'mock-token-frontend',
-  };
+const register = async (payload: {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+}): Promise<AuthSession> => {
+  const res = await apiFetch<{ accessToken: string; refreshToken: string; user: AuthUser }>(
+    '/auth/register',
+    { method: 'POST', body: JSON.stringify(payload) }
+  );
+  return { user: res.user, token: res.accessToken, refreshToken: res.refreshToken };
 };
 
 export const authService = {
@@ -74,4 +72,5 @@ export const authService = {
   persistSession,
   getSession,
   clearSession,
+  getUserFullName,
 };

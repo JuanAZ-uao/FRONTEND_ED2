@@ -1,6 +1,6 @@
-import type { Genre } from '../models/event.model';
+import { CONCERT_GENRES, type Genre } from '../models/event.model';
 
-const AVAILABLE_GENRES: Genre[] = ['Pop', 'Rock', 'Urban', 'Alternative', 'Electronic'];
+const AVAILABLE_GENRES: Genre[] = [...CONCERT_GENRES];
 
 const getStorageKey = (email: string) => `concertix_preferences_${email.toLowerCase()}`;
 

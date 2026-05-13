@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useCheckoutController } from '../../controllers/useCheckoutController';
+import { formatConcertDate } from '../../models/event.model';
 
 function CheckoutPage() {
   const {
@@ -75,10 +76,10 @@ function CheckoutPage() {
         <section className="panel-card">
           <span className="overline">Compra de Entradas</span>
           <h2 className="section-title" style={{ marginTop: 8 }}>
-            {event.artist}
+            {event.artist.name}
           </h2>
           <p className="muted" style={{ marginTop: 8 }}>
-            {event.title} · {event.dateLabel}
+            {event.tourName} · {formatConcertDate(event.date)}
           </p>
 
           <div className="form-grid" style={{ marginTop: 16 }}>
@@ -89,8 +90,8 @@ function CheckoutPage() {
                 onChange={(event) => setSelectedTierId(event.target.value)}
                 disabled={loading}
               >
-                {event.ticketTiers.map((tier) => (
-                  <option key={tier.id} value={tier.id}>
+                {event.ticketTypes.map((tier) => (
+                  <option key={tier.id} value={String(tier.id)}>
                     {tier.name} - ${tier.price.toLocaleString('es-CO')}
                   </option>
                 ))}
@@ -112,7 +113,7 @@ function CheckoutPage() {
 
             <div className="meta-line">
               <span>{selectedTier.name}</span>
-              <span>{selectedTier.remaining} disponibles</span>
+              <span>{selectedTier.availableQuantity} disponibles</span>
             </div>
           </div>
 
@@ -121,22 +122,26 @@ function CheckoutPage() {
             <div className="seat-stage">ESCENARIO</div>
 
             <div className="seat-grid-wrap">
-              {seatMap.map((row, rowIndex) => (
-                <div key={`seat-row-${rowIndex}`} className="seat-row">
-                  {row.map((seat) => (
-                    <button
-                      key={seat.id}
-                      type="button"
-                      className={`seat-dot ${seat.status}`}
-                      title={seat.label}
-                      onClick={() => toggleSeatSelection(seat)}
-                      disabled={
-                        loading || queueIsWaiting || seat.status === 'blocked' || seat.status === 'reserved'
-                      }
-                    />
-                  ))}
-                </div>
-              ))}
+              {seatMap.length === 0 ? (
+                <p className="muted" style={{ textAlign: 'center', padding: '16px 0' }}>Cargando mapa de asientos...</p>
+              ) : (
+                seatMap.map((row, rowIndex) => (
+                  <div key={`seat-row-${rowIndex}`} className="seat-row">
+                    {row.map((seat) => (
+                      <button
+                        key={seat.id}
+                        type="button"
+                        className={`seat-dot ${seat.status}`}
+                        title={seat.label}
+                        onClick={() => toggleSeatSelection(seat)}
+                        disabled={
+                          loading || queueIsWaiting || seat.status === 'blocked' || seat.status === 'reserved'
+                        }
+                      />
+                    ))}
+                  </div>
+                ))
+              )}
             </div>
 
             <div className="seat-legend">

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { PaymentCard } from '../models/payment.model';
+import { formatConcertDate, type Concert } from '../models/event.model';
 import { authService } from '../services/auth.service';
 import { eventService } from '../services/event.service';
 import { paymentService } from '../services/payment.service';
 import { reservationService } from '../services/reservation.service';
 import { socketQueueService } from '../services/socketQueue.service';
+import { apiFetch } from '../services/api.service';
 
 const emptyCard: PaymentCard = {
   holderName: '',
@@ -52,55 +54,32 @@ interface SeatCell {
   status: SeatStatus;
 }
 
+interface RealSeat {
+  seatLabel: string | null;
+  row: string | null;
+  status: string;
+}
+
 const clampQty = (value: number) => Math.min(Math.max(Math.floor(value), 1), 8);
-
-const hashText = (text: string) =>
-  text.split('').reduce((acc, char, index) => acc + char.charCodeAt(0) * (index + 1), 0);
-
-const buildSeatTemplate = (eventSeed: string, tierSeed: string): BaseSeatCell[][] => {
-  const rows = ['A', 'B', 'C'];
-  const seatsPerRow = 22;
-  const blockedColumns = new Set([6, 12, 18]);
-  const seed = hashText(`${eventSeed}-${tierSeed}`);
-
-  return rows.map((rowLabel, rowIndex) => {
-    return Array.from({ length: seatsPerRow }, (_, index) => {
-      const seatNumber = index + 1;
-      const seatId = `${rowLabel}${seatNumber}`;
-
-      if (blockedColumns.has(seatNumber)) {
-        return {
-          id: seatId,
-          label: seatId,
-          status: 'blocked' as const,
-        };
-      }
-
-      const score = (seed + rowIndex * 31 + seatNumber * 17) % 100;
-      const status: BaseSeatStatus = score < 12 ? 'reserved' : 'available';
-
-      return {
-        id: seatId,
-        label: seatId,
-        status,
-      };
-    });
-  });
-};
 
 export const useCheckoutController = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const eventSlug = searchParams.get('event');
+  const eventId = searchParams.get('event');
   const requestedTier = searchParams.get('tier');
   const requestedQtyRaw = Number(searchParams.get('qty') || 1);
   const requestedQty = Number.isFinite(requestedQtyRaw) ? clampQty(requestedQtyRaw) : 1;
 
-  const event = useMemo(() => {
-    if (!eventSlug) return null;
-    return eventService.getEventBySlug(eventSlug) ?? null;
-  }, [eventSlug]);
+  const [event, setEvent] = useState<Concert | null>(null);
+
+  useEffect(() => {
+    if (!eventId) { setEvent(null); return; }
+    eventService
+      .getById(Number(eventId))
+      .then(setEvent)
+      .catch(() => setEvent(null));
+  }, [eventId]);
 
   const [selectedTierId, setSelectedTierId] = useState<string>(requestedTier ?? '');
   const [quantity, setQuantity] = useState(requestedQty);
@@ -122,45 +101,62 @@ export const useCheckoutController = () => {
     }
 
     const hasRequestedTier =
-      !!requestedTier && event.ticketTiers.some((tier) => tier.id === requestedTier);
+      !!requestedTier && event.ticketTypes.some((t) => String(t.id) === requestedTier);
 
-    setSelectedTierId(hasRequestedTier ? (requestedTier as string) : event.ticketTiers[0]?.id ?? '');
+    setSelectedTierId(
+      hasRequestedTier ? (requestedTier as string) : String(event.ticketTypes[0]?.id ?? '')
+    );
     setQuantity(requestedQty);
   }, [event, requestedQty, requestedTier]);
 
   const selectedTier = useMemo(() => {
     if (!event) return null;
-    return event.ticketTiers.find((tier) => tier.id === selectedTierId) ?? event.ticketTiers[0] ?? null;
+    return (
+      event.ticketTypes.find((t) => String(t.id) === selectedTierId) ??
+      event.ticketTypes[0] ??
+      null
+    );
   }, [event, selectedTierId]);
 
   const subtotal = selectedTier ? selectedTier.price * quantity : 0;
   const summary = paymentService.calculateSummary(subtotal);
 
-  const baseSeatMap = useMemo(() => {
-    if (!event || !selectedTierId) return [] as BaseSeatCell[][];
-    return buildSeatTemplate(`${event.id}-${event.slug}`, selectedTierId);
-  }, [event, selectedTierId]);
+  const [rawSeats, setRawSeats] = useState<RealSeat[]>([]);
+
+  useEffect(() => {
+    if (!selectedTierId) { setRawSeats([]); return; }
+    apiFetch<RealSeat[]>(`/tickets/seats?ticketTypeId=${selectedTierId}`)
+      .then(setRawSeats)
+      .catch(() => setRawSeats([]));
+  }, [selectedTierId]);
+
+  const baseSeatMap = useMemo((): BaseSeatCell[][] => {
+    if (rawSeats.length === 0) return [];
+    const rowMap = new Map<string, BaseSeatCell[]>();
+    for (const seat of rawSeats) {
+      if (!seat.seatLabel) continue;
+      const rowKey = seat.row ?? seat.seatLabel[0] ?? 'A';
+      if (!rowMap.has(rowKey)) rowMap.set(rowKey, []);
+      const uiStatus: BaseSeatStatus =
+        seat.status === 'AVAILABLE' || seat.status === 'CANCELLED' ? 'available' : 'reserved';
+      rowMap.get(rowKey)!.push({ id: seat.seatLabel, label: seat.seatLabel, status: uiStatus });
+    }
+    return Array.from(rowMap.values());
+  }, [rawSeats]);
 
   const seatMap = useMemo(() => {
-    return baseSeatMap.map((row) => {
-      return row.map((seat) => {
+    return baseSeatMap.map((row) =>
+      row.map((seat) => {
         if (seat.status !== 'available') return seat as SeatCell;
-
-        if (selectedSeats.includes(seat.id)) {
-          return {
-            ...seat,
-            status: 'selected' as const,
-          };
-        }
-
+        if (selectedSeats.includes(seat.id)) return { ...seat, status: 'selected' as const };
         return seat as SeatCell;
-      });
-    });
+      })
+    );
   }, [baseSeatMap, selectedSeats]);
 
   useEffect(() => {
     setSelectedSeats([]);
-  }, [event?.slug, selectedTierId]);
+  }, [event?.id, selectedTierId]);
 
   useEffect(() => {
     setSelectedSeats((prev) => prev.slice(0, quantity));
@@ -200,7 +196,7 @@ export const useCheckoutController = () => {
     });
 
     socketQueueService.joinQueue({
-      eventSlug: event.slug,
+      eventSlug: String(event.id),
       tierId: selectedTierId,
       quantity,
       userEmail: session?.user.email,
@@ -212,22 +208,18 @@ export const useCheckoutController = () => {
       detachError();
       socketQueueService.leaveQueue();
     };
-  }, [event?.slug, selectedTierId]);
+  }, [event?.id, selectedTierId]);
 
   useEffect(() => {
-    return () => {
-      socketQueueService.disconnect();
-    };
+    return () => { socketQueueService.disconnect(); };
   }, []);
 
   const updateCardField = (field: keyof PaymentCard, value: string) => {
     let sanitizedValue = value;
-
     if (field === 'holderName') sanitizedValue = sanitizeHolderName(value);
     if (field === 'cardNumber') sanitizedValue = sanitizeCardNumber(value);
     if (field === 'expiry') sanitizedValue = sanitizeExpiry(value);
     if (field === 'cvc') sanitizedValue = sanitizeCvc(value);
-
     setCard((prev) => ({ ...prev, [field]: sanitizedValue }));
   };
 
@@ -240,35 +232,28 @@ export const useCheckoutController = () => {
       setStatus('Debes esperar tu turno en la cola para seleccionar asientos');
       return;
     }
-
     if (seat.status === 'blocked' || seat.status === 'reserved') return;
-
     setSelectedSeats((prev) => {
-      if (prev.includes(seat.id)) {
-        return prev.filter((seatId) => seatId !== seat.id);
-      }
-
+      if (prev.includes(seat.id)) return prev.filter((id) => id !== seat.id);
       if (prev.length >= quantity) {
         setStatusType('error');
         setStatus(`Solo puedes seleccionar ${quantity} asiento(s)`);
         return prev;
       }
-
       return [...prev, seat.id];
     });
   };
 
-  const hasMissingCardFields = () => {
-    return [card.holderName, card.cardNumber, card.expiry, card.cvc].some((field) => !field.trim());
-  };
+  const hasMissingCardFields = () =>
+    [card.holderName, card.cardNumber, card.expiry, card.cvc].some((f) => !f.trim());
 
   const hasInvalidCardFormat = () => {
-    const holderNameIsValid =
-      /^[A-Za-zÀ-ÖØ-öø-ÿ]+(?:\s+[A-Za-zÀ-ÖØ-öø-ÿ]+)*$/.test(card.holderName.trim());
+    const holderNameIsValid = /^[A-Za-zÀ-ÖØ-öø-ÿ]+(?:\s+[A-Za-zÀ-ÖØ-öø-ÿ]+)*$/.test(
+      card.holderName.trim()
+    );
     const cardNumberIsValid = card.cardNumber.replace(/\D/g, '').length === 16;
     const expiryIsValid = /^(0[1-9]|1[0-2])\/\d{2}$/.test(card.expiry);
     const cvcIsValid = /^\d{3}$/.test(card.cvc);
-
     return !(holderNameIsValid && cardNumberIsValid && expiryIsValid && cvcIsValid);
   };
 
@@ -312,32 +297,43 @@ export const useCheckoutController = () => {
 
     try {
       setLoading(true);
+
+      await apiFetch('/tickets/reserve', {
+        method: 'POST',
+        body: JSON.stringify({ ticketTypeId: Number(selectedTierId), quantity }),
+      });
+
+      await apiFetch('/orders', {
+        method: 'POST',
+        body: JSON.stringify({ items: [{ ticketTypeId: Number(selectedTierId), quantity }] }),
+      });
+
       const result = await paymentService.processCardPayment(card, summary.total);
+      const dateLabel = formatConcertDate(event.date);
 
       reservationService.addReservation(session.user.email, {
-        eventName: event.title,
-        eventDate: event.dateLabel.split(' - ')[0] ?? event.dateLabel,
-        venue: event.venue,
+        eventName: event.tourName,
+        eventDate: dateLabel.split(' - ')[0] ?? dateLabel,
+        venue: event.venue.name,
         seats: selectedSeats,
         quantity,
         amountPaid: summary.total,
         status: 'CONFIRMED',
       });
 
+      // Refresh seat map so any concurrent viewer sees updated statuses
+      if (selectedTierId) {
+        apiFetch<RealSeat[]>(`/tickets/seats?ticketTypeId=${selectedTierId}`)
+          .then(setRawSeats)
+          .catch(() => {});
+      }
+
       setStatusType('success');
       setStatus(`Pago aprobado - Operacion ${result.operationId}`);
-      navigate('/dashboard', {
-        state: {
-          purchaseSuccess: 'Compra realizada correctamente',
-        },
-      });
+      navigate('/tickets', { state: { purchaseSuccess: 'Compra realizada correctamente' } });
     } catch (error) {
       setStatusType('error');
-      if (error instanceof Error) {
-        setStatus(error.message);
-      } else {
-        setStatus('No fue posible procesar el pago');
-      }
+      setStatus(error instanceof Error ? error.message : 'No fue posible procesar el pago');
     } finally {
       setLoading(false);
     }

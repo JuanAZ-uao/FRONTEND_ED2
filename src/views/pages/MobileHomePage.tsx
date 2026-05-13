@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { formatConcertDate } from '../../models/event.model';
 import { useHomeController } from '../../controllers/useHomeController';
 
 function MobileHomePage() {
@@ -9,7 +10,7 @@ function MobileHomePage() {
     <section className="mobile-center">
       <div className="mobile-mock">
         <div className="mobile-screen">
-          <div className="hero-art" style={{ backgroundImage: `url(${featured.heroImage})` }}>
+          <div className="hero-art" style={{ backgroundImage: `url(${featured?.bannerUrl ?? ''})` }}>
             <span className="hero-badge">HOME MOBILE</span>
           </div>
 
@@ -20,11 +21,11 @@ function MobileHomePage() {
             {topEvents.map((event) => (
               <article key={event.id} className="tier-item" style={{ padding: 10 }}>
                 <span>
-                  <strong>{event.artist}</strong>
+                  <strong>{event.artist.name}</strong>
                   <br />
-                  <small>{event.dateLabel}</small>
+                  <small>{formatConcertDate(event.date)}</small>
                 </span>
-                <Link to={`/event/${event.slug}`} className="ghost-link">
+                <Link to={`/event/${event.id}`} className="ghost-link">
                   Ver
                 </Link>
               </article>

@@ -2,9 +2,10 @@ import { Link, useParams } from 'react-router-dom';
 import { useEventDetailController } from '../../controllers/useEventDetailController';
 
 function EventDetailPage() {
-  const { slug } = useParams();
+  const { id } = useParams();
   const {
     event,
+    loading,
     selectedTier,
     selectedTierId,
     setSelectedTierId,
@@ -12,7 +13,15 @@ function EventDetailPage() {
     increaseQty,
     decreaseQty,
     subtotal,
-  } = useEventDetailController(slug);
+  } = useEventDetailController(id);
+
+  if (loading) {
+    return (
+      <section className="section-card">
+        <p className="muted">Cargando concierto...</p>
+      </section>
+    );
+  }
 
   if (!event) {
     return (
@@ -31,19 +40,22 @@ function EventDetailPage() {
   return (
     <div className="page-stack split">
       <section className="panel-card">
-        <div className="event-thumb" style={{ backgroundImage: `url(${event.posterImage})`, borderRadius: 16 }} />
+        <div
+          className="event-thumb"
+          style={{ backgroundImage: `url(${event.imageUrl ?? ''})`, borderRadius: 16 }}
+        />
         <div style={{ marginTop: 16, display: 'grid', gap: 10 }}>
-          <span className="overline">{event.artist}</span>
-          <h2 className="section-title">{event.title}</h2>
+          <span className="overline">{event.artist.name}</span>
+          <h2 className="section-title">{event.tourName}</h2>
           <p className="muted">{event.description}</p>
           <div className="meta-line">
-            <span>{event.dateLabel}</span>
+            <span>{new Date(event.date).toLocaleString('es-CO', { dateStyle: 'long', timeStyle: 'short' })}</span>
             <span>
-              {event.city} · {event.venue}
+              {event.venue.city} · {event.venue.name}
             </span>
           </div>
           <div className="chip-row" style={{ marginBottom: 0 }}>
-            {event.tags.map((tag) => (
+            {event.genres.map((tag) => (
               <span key={tag} className="chip active">
                 {tag}
               </span>
@@ -59,17 +71,18 @@ function EventDetailPage() {
         </p>
 
         <div className="tier-list">
-          {event.ticketTiers.map((tier) => (
+          {event.ticketTypes.map((tier) => (
             <button
               key={tier.id}
               type="button"
-              className={`tier-item ${selectedTierId === tier.id ? 'active' : ''}`}
-              onClick={() => setSelectedTierId(tier.id)}
+              className={`tier-item ${selectedTierId === String(tier.id) ? 'active' : ''}`}
+              onClick={() => setSelectedTierId(String(tier.id))}
+              disabled={tier.availableQuantity === 0}
             >
               <span>
                 <strong>{tier.name}</strong>
                 <br />
-                <small>{tier.remaining} disponibles</small>
+                <small>{tier.availableQuantity} disponibles</small>
               </span>
               <span>${tier.price.toLocaleString('es-CO')}</span>
             </button>
@@ -96,7 +109,7 @@ function EventDetailPage() {
 
         <div style={{ marginTop: 16 }}>
           <Link
-            to={`/checkout?event=${event.slug}&tier=${selectedTierId}&qty=${quantity}`}
+            to={`/checkout?event=${event.id}&tier=${selectedTierId}&qty=${quantity}`}
             className="primary-btn"
             style={{ display: 'inline-block' }}
           >
