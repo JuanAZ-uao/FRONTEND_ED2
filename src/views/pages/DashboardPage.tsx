@@ -99,6 +99,12 @@ function DashboardPage() {
                   <small>
                     {reservation.eventDate} · {reservation.venue}
                   </small>
+                  {reservation.seats && reservation.seats.length > 0 && (
+                    <>
+                      <br />
+                      <small>Asientos: {reservation.seats.join(', ')}</small>
+                    </>
+                  )}
                 </span>
                 <span style={{ textAlign: 'right' }}>
                   <strong>${reservation.amountPaid.toLocaleString('es-CO')}</strong>

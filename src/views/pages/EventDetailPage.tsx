@@ -96,7 +96,7 @@ function EventDetailPage() {
 
         <div style={{ marginTop: 16 }}>
           <Link
-            to={`/checkout?event=${event.slug}&tier=${selectedTierId}`}
+            to={`/checkout?event=${event.slug}&tier=${selectedTierId}&qty=${quantity}`}
             className="primary-btn"
             style={{ display: 'inline-block' }}
           >

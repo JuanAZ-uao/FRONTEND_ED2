@@ -12,6 +12,7 @@ export interface TicketReservation {
   eventName: string;
   eventDate: string;
   venue: string;
+  seats?: string[];
   quantity: number;
   amountPaid: number;
   status: 'CONFIRMED' | 'PENDING';

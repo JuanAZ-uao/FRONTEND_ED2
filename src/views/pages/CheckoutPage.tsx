@@ -7,11 +7,17 @@ function CheckoutPage() {
     selectedTierId,
     setSelectedTierId,
     selectedTier,
+    seatMap,
+    selectedSeats,
+    toggleSeatSelection,
     quantity,
     increaseQty,
     decreaseQty,
     card,
     updateCardField,
+    queueState,
+    queuePosition,
+    queueEtaSeconds,
     summary,
     submitPayment,
     status,
@@ -43,132 +49,214 @@ function CheckoutPage() {
     );
   }
 
+  const queueIsWaiting = queueState === 'waiting';
+  const queueIsGranted = queueState === 'granted';
+
   return (
-    <div className="page-stack split">
-      <section className="panel-card">
-        <span className="overline">Compra de Entradas</span>
-        <h2 className="section-title" style={{ marginTop: 8 }}>
-          {event.artist}
-        </h2>
-        <p className="muted" style={{ marginTop: 8 }}>
-          {event.title} · {event.dateLabel}
-        </p>
+    <div className="page-stack">
+      <section className={`queue-banner ${queueState}`}>
+        <div>
+          <p className="queue-title">Cola de compra en tiempo real</p>
+          {queueIsWaiting ? (
+            <p className="muted">
+              Estas en cola para comprar. Posicion #{queuePosition || '...'} · Tiempo estimado {queueEtaSeconds ||
+                '...'} s
+            </p>
+          ) : (
+            <p className="muted">Turno habilitado. Ya puedes seleccionar asientos y confirmar el pago.</p>
+          )}
+        </div>
+        <span className={`queue-pill ${queueIsWaiting ? 'waiting' : 'granted'}`}>
+          {queueIsWaiting ? 'En espera' : 'Turno activo'}
+        </span>
+      </section>
 
-        <div className="form-grid" style={{ marginTop: 16 }}>
-          <label>
-            Localidad
-            <select value={selectedTierId} onChange={(event) => setSelectedTierId(event.target.value)}>
-              {event.ticketTiers.map((tier) => (
-                <option key={tier.id} value={tier.id}>
-                  {tier.name} - ${tier.price.toLocaleString('es-CO')}
-                </option>
-              ))}
-            </select>
-          </label>
+      <div className="split">
+        <section className="panel-card">
+          <span className="overline">Compra de Entradas</span>
+          <h2 className="section-title" style={{ marginTop: 8 }}>
+            {event.artist}
+          </h2>
+          <p className="muted" style={{ marginTop: 8 }}>
+            {event.title} · {event.dateLabel}
+          </p>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span className="muted">Cantidad</span>
-            <div className="qty-box">
-              <button type="button" onClick={decreaseQty}>
-                -
-              </button>
-              <span>{quantity}</span>
-              <button type="button" onClick={increaseQty}>
-                +
-              </button>
+          <div className="form-grid" style={{ marginTop: 16 }}>
+            <label>
+              Localidad
+              <select
+                value={selectedTierId}
+                onChange={(event) => setSelectedTierId(event.target.value)}
+                disabled={loading}
+              >
+                {event.ticketTiers.map((tier) => (
+                  <option key={tier.id} value={tier.id}>
+                    {tier.name} - ${tier.price.toLocaleString('es-CO')}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="muted">Cantidad</span>
+              <div className="qty-box">
+                <button type="button" onClick={decreaseQty} disabled={loading || queueIsWaiting}>
+                  -
+                </button>
+                <span>{quantity}</span>
+                <button type="button" onClick={increaseQty} disabled={loading || queueIsWaiting}>
+                  +
+                </button>
+              </div>
+            </div>
+
+            <div className="meta-line">
+              <span>{selectedTier.name}</span>
+              <span>{selectedTier.remaining} disponibles</span>
             </div>
           </div>
 
-          <div className="meta-line">
-            <span>{selectedTier.name}</span>
-            <span>{selectedTier.remaining} disponibles</span>
-          </div>
-        </div>
-      </section>
+          <section className="seat-map-card">
+            <h3 className="seat-map-title">Mapa de Asientos</h3>
+            <div className="seat-stage">ESCENARIO</div>
 
-      <section className="panel-card">
-        <h2 className="section-title">Pago con Tarjeta</h2>
+            <div className="seat-grid-wrap">
+              {seatMap.map((row, rowIndex) => (
+                <div key={`seat-row-${rowIndex}`} className="seat-row">
+                  {row.map((seat) => (
+                    <button
+                      key={seat.id}
+                      type="button"
+                      className={`seat-dot ${seat.status}`}
+                      title={seat.label}
+                      onClick={() => toggleSeatSelection(seat)}
+                      disabled={
+                        loading || queueIsWaiting || seat.status === 'blocked' || seat.status === 'reserved'
+                      }
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
 
-        <form
-          className="form-grid"
-          style={{ marginTop: 14 }}
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submitPayment();
-          }}
-        >
-          <label>
-            Nombre en la tarjeta
-            <input
-              value={card.holderName}
-              onChange={(event) => updateCardField('holderName', event.target.value)}
-              placeholder="Nombre Apellido"
-              autoComplete="cc-name"
-            />
-          </label>
+            <div className="seat-legend">
+              <span className="legend-item">
+                <i className="seat-dot available" /> Disponible
+              </span>
+              <span className="legend-item">
+                <i className="seat-dot selected" /> Seleccionado
+              </span>
+              <span className="legend-item">
+                <i className="seat-dot reserved" /> Reservado
+              </span>
+              <span className="legend-item">
+                <i className="seat-dot blocked" /> Pasillo
+              </span>
+            </div>
 
-          <label>
-            Numero de tarjeta
-            <input
-              value={card.cardNumber}
-              onChange={(event) => updateCardField('cardNumber', event.target.value)}
-              placeholder="4242 4242 4242 4242"
-              inputMode="numeric"
-              maxLength={19}
-              autoComplete="cc-number"
-            />
-          </label>
+            <p className="muted" style={{ marginTop: 10 }}>
+              Seleccionados ({selectedSeats.length}/{quantity}):{' '}
+              {selectedSeats.length > 0 ? selectedSeats.join(', ') : 'Ninguno'}
+            </p>
+          </section>
+        </section>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <section className="panel-card">
+          <h2 className="section-title">Pago con Tarjeta</h2>
+
+          <form
+            className="form-grid"
+            style={{ marginTop: 14 }}
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submitPayment();
+            }}
+          >
             <label>
-              Expiracion
+              Nombre en la tarjeta
               <input
-                value={card.expiry}
-                onChange={(event) => updateCardField('expiry', event.target.value)}
-                placeholder="MM/AA"
-                inputMode="numeric"
-                maxLength={5}
-                autoComplete="cc-exp"
+                value={card.holderName}
+                onChange={(event) => updateCardField('holderName', event.target.value)}
+                placeholder="Nombre Apellido"
+                autoComplete="cc-name"
+                disabled={loading || queueIsWaiting}
               />
             </label>
 
             <label>
-              CVC
+              Numero de tarjeta
               <input
-                value={card.cvc}
-                onChange={(event) => updateCardField('cvc', event.target.value)}
-                placeholder="123"
+                value={card.cardNumber}
+                onChange={(event) => updateCardField('cardNumber', event.target.value)}
+                placeholder="4242 4242 4242 4242"
                 inputMode="numeric"
-                maxLength={3}
-                autoComplete="cc-csc"
+                maxLength={19}
+                autoComplete="cc-number"
+                disabled={loading || queueIsWaiting}
               />
             </label>
-          </div>
 
-          <div className="meta-line">
-            <span>Subtotal</span>
-            <span>${summary.subtotal.toLocaleString('es-CO')}</span>
-          </div>
-          <div className="meta-line">
-            <span>Servicio</span>
-            <span>${summary.serviceFee.toLocaleString('es-CO')}</span>
-          </div>
-          <div className="meta-line">
-            <span>Seguro</span>
-            <span>${summary.insurance.toLocaleString('es-CO')}</span>
-          </div>
-          <div className="meta-line" style={{ fontSize: '1rem' }}>
-            <strong>Total</strong>
-            <strong>${summary.total.toLocaleString('es-CO')}</strong>
-          </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <label>
+                Expiracion
+                <input
+                  value={card.expiry}
+                  onChange={(event) => updateCardField('expiry', event.target.value)}
+                  placeholder="MM/AA"
+                  inputMode="numeric"
+                  maxLength={5}
+                  autoComplete="cc-exp"
+                  disabled={loading || queueIsWaiting}
+                />
+              </label>
 
-          <button className="primary-btn" type="submit" disabled={loading}>
-            {loading ? 'Procesando pago...' : 'Confirmar y pagar'}
-          </button>
-        </form>
+              <label>
+                CVC
+                <input
+                  value={card.cvc}
+                  onChange={(event) => updateCardField('cvc', event.target.value)}
+                  placeholder="123"
+                  inputMode="numeric"
+                  maxLength={3}
+                  autoComplete="cc-csc"
+                  disabled={loading || queueIsWaiting}
+                />
+              </label>
+            </div>
 
-        {status && <p className={`feedback-alert ${statusType}`}>{status}</p>}
-      </section>
+            <div className="meta-line">
+              <span>Subtotal</span>
+              <span>${summary.subtotal.toLocaleString('es-CO')}</span>
+            </div>
+            <div className="meta-line">
+              <span>Servicio</span>
+              <span>${summary.serviceFee.toLocaleString('es-CO')}</span>
+            </div>
+            <div className="meta-line">
+              <span>Seguro</span>
+              <span>${summary.insurance.toLocaleString('es-CO')}</span>
+            </div>
+            <div className="meta-line" style={{ fontSize: '1rem' }}>
+              <strong>Total</strong>
+              <strong>${summary.total.toLocaleString('es-CO')}</strong>
+            </div>
+
+            <button
+              className="primary-btn"
+              type="submit"
+              disabled={loading || !queueIsGranted || selectedSeats.length !== quantity}
+            >
+              {queueIsWaiting
+                ? 'Esperando turno...'
+                : loading
+                  ? 'Procesando pago...'
+                  : 'Confirmar y pagar'}
+            </button>
+          </form>
+
+          {status && <p className={`feedback-alert ${statusType}`}>{status}</p>}
+        </section>
+      </div>
     </div>
   );
 }

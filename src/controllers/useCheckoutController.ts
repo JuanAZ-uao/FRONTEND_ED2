@@ -5,6 +5,7 @@ import { authService } from '../services/auth.service';
 import { eventService } from '../services/event.service';
 import { paymentService } from '../services/payment.service';
 import { reservationService } from '../services/reservation.service';
+import { socketQueueService } from '../services/socketQueue.service';
 
 const emptyCard: PaymentCard = {
   holderName: '',
@@ -35,12 +36,66 @@ const sanitizeExpiry = (value: string) => {
 
 const sanitizeCvc = (value: string) => value.replace(/\D/g, '').slice(0, 3);
 
+type QueueState = 'idle' | 'waiting' | 'granted';
+type BaseSeatStatus = 'available' | 'reserved' | 'blocked';
+type SeatStatus = BaseSeatStatus | 'selected';
+
+interface BaseSeatCell {
+  id: string;
+  label: string;
+  status: BaseSeatStatus;
+}
+
+interface SeatCell {
+  id: string;
+  label: string;
+  status: SeatStatus;
+}
+
+const clampQty = (value: number) => Math.min(Math.max(Math.floor(value), 1), 8);
+
+const hashText = (text: string) =>
+  text.split('').reduce((acc, char, index) => acc + char.charCodeAt(0) * (index + 1), 0);
+
+const buildSeatTemplate = (eventSeed: string, tierSeed: string): BaseSeatCell[][] => {
+  const rows = ['A', 'B', 'C'];
+  const seatsPerRow = 22;
+  const blockedColumns = new Set([6, 12, 18]);
+  const seed = hashText(`${eventSeed}-${tierSeed}`);
+
+  return rows.map((rowLabel, rowIndex) => {
+    return Array.from({ length: seatsPerRow }, (_, index) => {
+      const seatNumber = index + 1;
+      const seatId = `${rowLabel}${seatNumber}`;
+
+      if (blockedColumns.has(seatNumber)) {
+        return {
+          id: seatId,
+          label: seatId,
+          status: 'blocked' as const,
+        };
+      }
+
+      const score = (seed + rowIndex * 31 + seatNumber * 17) % 100;
+      const status: BaseSeatStatus = score < 12 ? 'reserved' : 'available';
+
+      return {
+        id: seatId,
+        label: seatId,
+        status,
+      };
+    });
+  });
+};
+
 export const useCheckoutController = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const eventSlug = searchParams.get('event');
   const requestedTier = searchParams.get('tier');
+  const requestedQtyRaw = Number(searchParams.get('qty') || 1);
+  const requestedQty = Number.isFinite(requestedQtyRaw) ? clampQty(requestedQtyRaw) : 1;
 
   const event = useMemo(() => {
     if (!eventSlug) return null;
@@ -48,15 +103,21 @@ export const useCheckoutController = () => {
   }, [eventSlug]);
 
   const [selectedTierId, setSelectedTierId] = useState<string>(requestedTier ?? '');
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState(requestedQty);
   const [card, setCard] = useState<PaymentCard>(emptyCard);
+  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [status, setStatus] = useState('');
   const [statusType, setStatusType] = useState<'error' | 'success' | 'info'>('info');
+  const [queueState, setQueueState] = useState<QueueState>('idle');
+  const [queuePosition, setQueuePosition] = useState(0);
+  const [queueEtaSeconds, setQueueEtaSeconds] = useState(0);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!event) {
       setSelectedTierId('');
+      setSelectedSeats([]);
+      setQueueState('idle');
       return;
     }
 
@@ -64,8 +125,8 @@ export const useCheckoutController = () => {
       !!requestedTier && event.ticketTiers.some((tier) => tier.id === requestedTier);
 
     setSelectedTierId(hasRequestedTier ? (requestedTier as string) : event.ticketTiers[0]?.id ?? '');
-    setQuantity(1);
-  }, [event, requestedTier]);
+    setQuantity(requestedQty);
+  }, [event, requestedQty, requestedTier]);
 
   const selectedTier = useMemo(() => {
     if (!event) return null;
@@ -74,6 +135,90 @@ export const useCheckoutController = () => {
 
   const subtotal = selectedTier ? selectedTier.price * quantity : 0;
   const summary = paymentService.calculateSummary(subtotal);
+
+  const baseSeatMap = useMemo(() => {
+    if (!event || !selectedTierId) return [] as BaseSeatCell[][];
+    return buildSeatTemplate(`${event.id}-${event.slug}`, selectedTierId);
+  }, [event, selectedTierId]);
+
+  const seatMap = useMemo(() => {
+    return baseSeatMap.map((row) => {
+      return row.map((seat) => {
+        if (seat.status !== 'available') return seat as SeatCell;
+
+        if (selectedSeats.includes(seat.id)) {
+          return {
+            ...seat,
+            status: 'selected' as const,
+          };
+        }
+
+        return seat as SeatCell;
+      });
+    });
+  }, [baseSeatMap, selectedSeats]);
+
+  useEffect(() => {
+    setSelectedSeats([]);
+  }, [event?.slug, selectedTierId]);
+
+  useEffect(() => {
+    setSelectedSeats((prev) => prev.slice(0, quantity));
+  }, [quantity]);
+
+  useEffect(() => {
+    if (!event || !selectedTierId) return;
+
+    const session = authService.getSession();
+
+    setQueueState('waiting');
+    setQueuePosition(0);
+    setQueueEtaSeconds(0);
+    setStatusType('info');
+    setStatus('Entraste en la cola de compra. Espera tu turno para continuar.');
+
+    const detachUpdate = socketQueueService.onQueueUpdate((payload) => {
+      setQueueState('waiting');
+      setQueuePosition(payload.position);
+      setQueueEtaSeconds(payload.estimatedWaitSeconds);
+    });
+
+    const detachGranted = socketQueueService.onQueueGranted((payload) => {
+      setQueueState('granted');
+      setQueuePosition(0);
+      setQueueEtaSeconds(0);
+      setStatusType('success');
+      setStatus(
+        `Tu turno fue habilitado por ${payload.holdSeconds} segundos. Selecciona asientos y confirma el pago.`
+      );
+    });
+
+    const detachError = socketQueueService.onQueueError((payload) => {
+      setQueueState('idle');
+      setStatusType('error');
+      setStatus(payload.message || 'No fue posible entrar a la cola');
+    });
+
+    socketQueueService.joinQueue({
+      eventSlug: event.slug,
+      tierId: selectedTierId,
+      quantity,
+      userEmail: session?.user.email,
+    });
+
+    return () => {
+      detachUpdate();
+      detachGranted();
+      detachError();
+      socketQueueService.leaveQueue();
+    };
+  }, [event?.slug, selectedTierId]);
+
+  useEffect(() => {
+    return () => {
+      socketQueueService.disconnect();
+    };
+  }, []);
 
   const updateCardField = (field: keyof PaymentCard, value: string) => {
     let sanitizedValue = value;
@@ -88,6 +233,30 @@ export const useCheckoutController = () => {
 
   const increaseQty = () => setQuantity((prev) => Math.min(prev + 1, 8));
   const decreaseQty = () => setQuantity((prev) => Math.max(prev - 1, 1));
+
+  const toggleSeatSelection = (seat: SeatCell) => {
+    if (queueState !== 'granted') {
+      setStatusType('error');
+      setStatus('Debes esperar tu turno en la cola para seleccionar asientos');
+      return;
+    }
+
+    if (seat.status === 'blocked' || seat.status === 'reserved') return;
+
+    setSelectedSeats((prev) => {
+      if (prev.includes(seat.id)) {
+        return prev.filter((seatId) => seatId !== seat.id);
+      }
+
+      if (prev.length >= quantity) {
+        setStatusType('error');
+        setStatus(`Solo puedes seleccionar ${quantity} asiento(s)`);
+        return prev;
+      }
+
+      return [...prev, seat.id];
+    });
+  };
 
   const hasMissingCardFields = () => {
     return [card.holderName, card.cardNumber, card.expiry, card.cvc].some((field) => !field.trim());
@@ -129,6 +298,18 @@ export const useCheckoutController = () => {
       return;
     }
 
+    if (queueState !== 'granted') {
+      setStatusType('error');
+      setStatus('Aun no tienes turno habilitado en la cola de compra');
+      return;
+    }
+
+    if (selectedSeats.length !== quantity) {
+      setStatusType('error');
+      setStatus(`Debes seleccionar exactamente ${quantity} asiento(s) para continuar`);
+      return;
+    }
+
     try {
       setLoading(true);
       const result = await paymentService.processCardPayment(card, summary.total);
@@ -137,6 +318,7 @@ export const useCheckoutController = () => {
         eventName: event.title,
         eventDate: event.dateLabel.split(' - ')[0] ?? event.dateLabel,
         venue: event.venue,
+        seats: selectedSeats,
         quantity,
         amountPaid: summary.total,
         status: 'CONFIRMED',
@@ -166,11 +348,17 @@ export const useCheckoutController = () => {
     selectedTierId,
     setSelectedTierId,
     selectedTier,
+    seatMap,
+    selectedSeats,
+    toggleSeatSelection,
     quantity,
     increaseQty,
     decreaseQty,
     card,
     updateCardField,
+    queueState,
+    queuePosition,
+    queueEtaSeconds,
     summary,
     submitPayment,
     status,
